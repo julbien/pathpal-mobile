@@ -22,13 +22,13 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    // For demo, use hardcoded user data. Replace with API call for real app.
-    usernameController = TextEditingController(text: 'maxine');
-    emailController = TextEditingController(text: 'maxinepedimato@gmail.com');
-    phoneController = TextEditingController(text: '09123456789');
-    _originalUsername = usernameController.text;
-    _originalEmail = emailController.text;
-    _originalPhone = phoneController.text;
+    // TODO: Replace with API call to fetch real user data
+    usernameController = TextEditingController();
+    emailController = TextEditingController();
+    phoneController = TextEditingController();
+    _originalUsername = '';
+    _originalEmail = '';
+    _originalPhone = '';
   }
 
   @override
