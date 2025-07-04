@@ -85,7 +85,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // Math CAPTCHA validation
     if (int.tryParse(_captchaController.text) != _mathAnswer) {
       setState(() {
-        _captchaError = 'Mali ang sagot. Pakisubukang muli.';
+        _captchaError = 'Incorrect answer. Please try again.';
       });
       _generateCaptcha();
       return;
@@ -409,7 +409,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           controller: _captchaController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            labelText: 'Sagot',
+                            labelText: 'Answer',
                             errorText: _captchaError,
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -419,7 +419,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       IconButton(
                         icon: const Icon(Icons.refresh),
                         onPressed: _generateCaptcha,
-                        tooltip: 'Bagong tanong',
+                        tooltip: 'New question',
                       ),
                     ],
                   ),
