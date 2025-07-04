@@ -22,7 +22,7 @@ class ApiConfig {
   // For iOS simulator
   // static const String baseUrl = 'http://localhost:3000/api';
   
-  // For production (replace with your actual domain)
+  // For production (replace with your actual domain)f
   // static const String baseUrl = 'https://yourdomain.com/api';
   
   // API endpoints - make sure these match your web app's endpoints

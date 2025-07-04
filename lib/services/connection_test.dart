@@ -110,3 +110,5 @@ Debug Mode: ${ApiConfig.debugMode}
 ''';
   }
 } 
+
+// git clone https://github.com/julbien/PathPal-Flutter.git

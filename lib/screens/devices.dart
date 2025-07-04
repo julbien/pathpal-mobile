@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,11 +17,18 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class DevicePage extends StatelessWidget {
+class DevicePage extends StatefulWidget {
   const DevicePage({super.key});
 
+  @override
+  State<DevicePage> createState() => _DevicePageState();
+}
+
+class _DevicePageState extends State<DevicePage> {
+  List<Map<String, String>> devices = [];
+
   // Show link or edit dialog depending on isUpdate value
-  void showLinkOrEditDialog(BuildContext context, {required bool isUpdate}) {
+  void showLinkOrEditDialog(BuildContext context, {required bool isUpdate, int? deviceIndex}) {
     showDialog(
       context: context,
       barrierDismissible: false, // Don't close when tapping outside
@@ -43,8 +51,9 @@ class DevicePage extends StatelessWidget {
                 // Device name input
                 const Align(alignment: Alignment.centerLeft, child: Text("Device Name:")),
                 const SizedBox(height: 4),
-                const TextField(
-                  decoration: InputDecoration(border: OutlineInputBorder()),
+                TextField(
+                  controller: _deviceNameController,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
                 ),
 
                 const SizedBox(height: 12),
@@ -53,30 +62,15 @@ class DevicePage extends StatelessWidget {
                 const Align(alignment: Alignment.centerLeft, child: Text("Serial Number:")),
                 const SizedBox(height: 4),
                 TextField(
+                  controller: _serialController,
                   readOnly: isUpdate,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
-                    hintText: isUpdate ? "PPSC-00001" : "Enter 5-digit number",
+                    hintText: isUpdate ? _serialController.text : "Enter 5-digit number",
                     helperText: isUpdate ? null : "Enter 5-digit number (will be prefixed with PPSC-)",
                     fillColor: isUpdate ? Colors.grey.shade200 : null,
                     filled: isUpdate,
                   ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // User type dropdown
-                const Align(alignment: Alignment.centerLeft, child: Text("User Type:")),
-                const SizedBox(height: 4),
-                DropdownButtonFormField<String>(
-                  value: 'Admin',
-                  items: const [
-                    DropdownMenuItem(value: 'Admin', child: Text('Admin')),
-                    DropdownMenuItem(value: 'User', child: Text('User')),
-                    DropdownMenuItem(value: 'Guest', child: Text('Guest')),
-                  ],
-                  onChanged: (_) {},
-                  decoration: const InputDecoration(border: OutlineInputBorder()),
                 ),
 
                 const SizedBox(height: 20),
@@ -94,7 +88,7 @@ class DevicePage extends StatelessWidget {
                     ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        showConfirmationDialog(context);
+                        showConfirmationDialog(context, isUpdate: isUpdate, deviceIndex: deviceIndex);
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
                       child: const Text('Save'),
@@ -109,8 +103,12 @@ class DevicePage extends StatelessWidget {
     );
   }
 
+  // Controllers for device fields
+  final TextEditingController _deviceNameController = TextEditingController();
+  final TextEditingController _serialController = TextEditingController();
+
   // Show confirmation dialog before saving
-  void showConfirmationDialog(BuildContext context) {
+  void showConfirmationDialog(BuildContext context, {required bool isUpdate, int? deviceIndex}) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -135,8 +133,33 @@ class DevicePage extends StatelessWidget {
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('No')),
                   const SizedBox(width: 20),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
+                      final serial = _serialController.text.trim();
+                      if (serial.isEmpty) {
+                        _showErrorDialog(context, 'Serial number is required.');
+                        return;
+                      }
+                      final checkResult = await ApiService.checkDeviceAvailable('PPSC-$serial');
+                      if (checkResult['success'] != true) {
+                        _showErrorDialog(context, checkResult['message'] ?? 'Device not available.');
+                        return;
+                      }
+                      setState(() {
+                        if (isUpdate && deviceIndex != null) {
+                          devices[deviceIndex] = {
+                            'name': _deviceNameController.text,
+                            'serial': 'PPSC-${_serialController.text}',
+                          };
+                        } else {
+                          devices.add({
+                            'name': _deviceNameController.text,
+                            'serial': 'PPSC-${_serialController.text}',
+                          });
+                        }
+                        _deviceNameController.clear();
+                        _serialController.clear();
+                      });
                       showSuccessDialog(context);
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
@@ -151,8 +174,24 @@ class DevicePage extends StatelessWidget {
     );
   }
 
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Show confirmation before unlinking a device
-  void showUnlinkConfirmationDialog(BuildContext context) {
+  void showUnlinkConfirmationDialog(BuildContext context, int deviceIndex) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -177,53 +216,13 @@ class DevicePage extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      showPasswordDialog(context);
+                      setState(() {
+                        devices.removeAt(deviceIndex);
+                      });
+                      showSuccessDialog(context);
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                     child: const Text('Yes'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Ask for password before completing unlink
-  void showPasswordDialog(BuildContext context) {
-    TextEditingController passwordController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Enter Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                    border: OutlineInputBorder(), labelText: 'Password'),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      showSuccessDialog(context);
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
-                    child: const Text('Confirm'),
                   ),
                 ],
               ),
@@ -261,6 +260,13 @@ class DevicePage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _deviceNameController.dispose();
+    _serialController.dispose();
+    super.dispose();
   }
 
   @override
@@ -305,50 +311,64 @@ class DevicePage extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Example device card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Device info
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Lolo Julio',
-                          style: TextStyle(
-                              color: Colors.blue[900],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
-                      const SizedBox(height: 4),
-                      const Text('PPSC-00001',
-                          style: TextStyle(color: Colors.black54, fontSize: 13)),
-                    ],
-                  ),
+            devices.isEmpty
+                ? const Text('No devices linked yet.', style: TextStyle(color: Colors.black54, fontSize: 16))
+                : Expanded(
+                    child: ListView.builder(
+                      itemCount: devices.length,
+                      itemBuilder: (context, index) {
+                        final device = devices[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Device info
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(device['name'] ?? '',
+                                      style: TextStyle(
+                                          color: Colors.blue[900],
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text(device['serial'] ?? '',
+                                      style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                                ],
+                              ),
 
-                  // Edit and Unlink buttons
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => showLinkOrEditDialog(context, isUpdate: true),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
-                        child: const Text('Edit', style: TextStyle(color: Colors.white)),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () => showUnlinkConfirmationDialog(context),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text('Unlink', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
+                              // Edit and Unlink buttons
+                              Row(
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      _deviceNameController.text = device['name'] ?? '';
+                                      _serialController.text = (device['serial'] ?? '').replaceFirst('PPSC-', '');
+                                      showLinkOrEditDialog(context, isUpdate: true, deviceIndex: index);
+                                    },
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
+                                    child: const Text('Edit', style: TextStyle(color: Colors.white)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: () => showUnlinkConfirmationDialog(context, index),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                    child: const Text('Unlink', style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ],
-              ),
-            ),
           ],
         ),
       ),

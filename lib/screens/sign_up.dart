@@ -19,15 +19,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _captchaController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _agreeToTerms = false;
   final FocusNode _passwordFocusNode = FocusNode();
   bool _showPasswordRequirements = false;
-  int _captchaNum1 = 0;
-  int _captchaNum2 = 0;
+  int _num1 = 0;
+  int _num2 = 0;
+  int _mathAnswer = 0;
+  final TextEditingController _captchaController = TextEditingController();
+  String? _captchaError;
+  bool _showSuccessBanner = false;
 
   @override
   void initState() {
@@ -41,38 +45,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   void _generateCaptcha() {
-    final random = Random();
+    final rand = Random();
+    _num1 = rand.nextInt(10) + 1;
+    _num2 = rand.nextInt(10) + 1;
+    _mathAnswer = _num1 + _num2;
+    _captchaController.clear();
     setState(() {
-      _captchaNum1 = random.nextInt(10) + 1;
-      _captchaNum2 = random.nextInt(10) + 1;
-      _captchaController.clear();
+      _captchaError = null;
     });
   }
 
   @override
   void dispose() {
+    _captchaController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _passwordFocusNode.dispose();
-    _captchaController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSignUp() async {
-    final userAnswer = int.tryParse(_captchaController.text);
-    if (userAnswer == null || userAnswer != (_captchaNum1 + _captchaNum2)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect captcha answer. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      _generateCaptcha();
-      return;
-    }
-
     if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -87,8 +82,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
+    // Math CAPTCHA validation
+    if (int.tryParse(_captchaController.text) != _mathAnswer) {
+      setState(() {
+        _captchaError = 'Mali ang sagot. Pakisubukang muli.';
+      });
+      _generateCaptcha();
+      return;
+    }
+
     setState(() {
       _isLoading = true;
+      _captchaError = null;
     });
 
     try {
@@ -108,19 +113,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
 
         if (mounted) {
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account created successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // Navigate to dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardPage()),
-          );
+          setState(() {
+            _showSuccessBanner = true;
+          });
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) {
+            setState(() {
+              _showSuccessBanner = false;
+            });
+            // Navigate to dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardPage()),
+            );
+          }
         }
       }
     } catch (e) {
@@ -141,17 +147,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  bool _isPasswordValid(String password) {
+    return _missingPasswordRequirements(password).isEmpty;
+  }
+
+  List<String> _missingPasswordRequirements(String password) {
+    final List<String> missing = [];
+    if (password.length < 8) missing.add('at least 8 characters');
+    if (!RegExp(r'(?=.*[a-z])').hasMatch(password)) missing.add('a lowercase letter');
+    if (!RegExp(r'(?=.*[A-Z])').hasMatch(password)) missing.add('an uppercase letter');
+    if (!RegExp(r'(?=.*[0-9])').hasMatch(password)) missing.add('a number');
+    if (!RegExp(r'(?=.*[!@#\$%^&*(),.?":{}|<>])').hasMatch(password)) missing.add('a special character');
+    return missing;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Safe padding around the screen
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Center(
-          child: SingleChildScrollView(
+      appBar: AppBar(
+        title: const Text('Sign Up'),
+      ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
             child: Form(
               key: _formKey,
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Logo at the top
                   Container(
@@ -213,7 +236,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Please enter email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -253,24 +276,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     controller: _passwordController,
                     focusNode: _passwordFocusNode,
                     obscureText: _obscurePassword,
+                    onChanged: (_) {
+                      setState(() {});
+                    },
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter password';
                       }
-                      if (value.length < 8) {
-                        return 'Password must be at least 8 characters';
-                      }
-                      if (!RegExp(r'(?=.*[a-z])').hasMatch(value)) {
-                        return 'Password must contain a lowercase letter';
-                      }
-                      if (!RegExp(r'(?=.*[A-Z])').hasMatch(value)) {
-                        return 'Password must contain an uppercase letter';
-                      }
-                      if (!RegExp(r'(?=.*[0-9])').hasMatch(value)) {
-                        return 'Password must contain a number';
-                      }
-                      if (!RegExp(r'(?=.*[!@#\$%^&*(),.?":{}|<>])').hasMatch(value)) {
-                        return 'Password must contain a special character';
+                      final missing = _missingPasswordRequirements(value);
+                      if (missing.isNotEmpty) {
+                        return 'Password must have: ' + missing.join(', ');
                       }
                       return null;
                     },
@@ -278,6 +293,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       hintText: 'Password',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: _passwordController.text.isEmpty
+                              ? Colors.grey
+                              : _isPasswordValid(_passwordController.text)
+                                  ? Colors.green
+                                  : Colors.red,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: _passwordController.text.isEmpty
+                              ? Colors.grey
+                              : _isPasswordValid(_passwordController.text)
+                                  ? Colors.green
+                                  : Colors.red,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: _passwordController.text.isEmpty
+                              ? Colors.grey
+                              : _isPasswordValid(_passwordController.text)
+                                  ? Colors.green
+                                  : Colors.red,
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                       suffixIcon: IconButton(
@@ -294,58 +337,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: 8),
                   if (_showPasswordRequirements)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Password must contain:',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text('• At least 8 characters'),
-                          Text('• At least one uppercase letter (A-Z)'),
-                          Text('• At least one lowercase letter (a-z)'),
-                          Text('• At least one number (0-9)'),
-                          Text('• At least one special character (!@#\$%^&*)'),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                      child: Text(
+                        'Minimum of 8 characters, at least 1 uppercase, 1 lowercase, 1 number and 1 special character.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _passwordController.text.isEmpty
+                              ? Colors.red
+                              : _isPasswordValid(_passwordController.text)
+                                  ? Colors.green
+                                  : Colors.red,
+                          fontWeight: _isPasswordValid(_passwordController.text)
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
-                  const SizedBox(height: 16),
-
-                  // Captcha
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          'What is $_captchaNum1 + $_captchaNum2 ?',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 1,
-                        child: TextFormField(
-                          controller: _captchaController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            hintText: 'Answer',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 16),
 
                   // Terms and conditions
@@ -385,6 +393,33 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ],
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Math CAPTCHA
+                  Row(
+                    children: [
+                      Text('$_num1 + $_num2 = ?'),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 60,
+                        child: TextField(
+                          controller: _captchaController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Sagot',
+                            errorText: _captchaError,
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: _generateCaptcha,
+                        tooltip: 'Bagong tanong',
                       ),
                     ],
                   ),
@@ -442,7 +477,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
             ),
           ),
-        ),
+          if (_showSuccessBanner)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.green,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: const Center(
+                  child: Text(
+                    'Account created successfully!',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

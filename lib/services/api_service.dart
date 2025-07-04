@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
 class ApiService {
   // Sign up method
@@ -234,6 +235,74 @@ class ApiService {
           'otp': otp,
           'newPassword': newPassword,
         }),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Check if device is available and not already linked
+  static Future<Map<String, dynamic>> checkDeviceAvailable(String serialNumber) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/devices/check'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'serial_number': serialNumber}),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Update user profile
+  static Future<Map<String, dynamic>> updateProfile({
+    required String username,
+    required String email,
+    required String phoneNumber,
+  }) async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/profile/update'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'username': username,
+          'email': email,
+          'phone_number': phoneNumber,
+        }),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Fetch user profile
+  static Future<Map<String, dynamic>> fetchUserProfile() async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       ).timeout(
         Duration(milliseconds: ApiConfig.connectionTimeout),
       );

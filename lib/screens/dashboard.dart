@@ -15,7 +15,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String selectedItem = "John's Cane";
 
   // List of available canes
-  final List<String> caneList = ["John's Cane", "Mary's Cane", "Alex's Cane"];
+  final List<String> caneList = [];
 
   // Main theme color
   final Color primaryBlue = const Color(0xFF0057B8);
@@ -183,22 +183,31 @@ class _DashboardPageState extends State<DashboardPage> {
                       border: Border.all(color: Colors.black45),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: DropdownButton<String>(
-                      value: selectedItem,
-                      isExpanded: true,
-                      underline: const SizedBox(),
-                      items: caneList.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        setState(() {
-                          selectedItem = newValue!;
-                        });
-                      },
-                    ),
+                    child: caneList.isEmpty
+                        ? DropdownButton<String>(
+                            value: null,
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            items: const [],
+                            hint: const Text('No device linked yet'),
+                            onChanged: null,
+                          )
+                        : DropdownButton<String>(
+                            value: selectedItem,
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            items: caneList.map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                            onChanged: (newValue) {
+                              setState(() {
+                                selectedItem = newValue!;
+                              });
+                            },
+                          ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -244,19 +253,21 @@ class _DashboardPageState extends State<DashboardPage> {
                       color: primaryBlue,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('Battery Status',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 8),
-                          Icon(Icons.battery_charging_full, color: Colors.white, size: 40),
-                          SizedBox(height: 8),
-                          Text('50%',
-                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+                    child: Center(
+                      child: caneList.isEmpty
+                          ? const Text('No device data', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Text('Battery Status',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                SizedBox(height: 8),
+                                Icon(Icons.battery_charging_full, color: Colors.white, size: 40),
+                                SizedBox(height: 8),
+                                Text('50%',
+                                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
                     ),
                   ),
                 ),
@@ -271,22 +282,24 @@ class _DashboardPageState extends State<DashboardPage> {
                       color: primaryBlue,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('Recent Activity',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 8),
-                          Text('Last Movement',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          Text('5 minutes ago', style: TextStyle(color: Colors.white)),
-                          SizedBox(height: 8),
-                          Text('Obstacle Detected',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          Text('5 minutes ago', style: TextStyle(color: Colors.white)),
-                        ],
-                      ),
+                    child: Center(
+                      child: caneList.isEmpty
+                          ? const Text('No device data', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Text('Recent Activity',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                SizedBox(height: 8),
+                                Text('Last Movement',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text('5 minutes ago', style: TextStyle(color: Colors.white)),
+                                SizedBox(height: 8),
+                                Text('Obstacle Detected',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text('5 minutes ago', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
                     ),
                   ),
                 ),
