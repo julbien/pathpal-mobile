@@ -1,7 +1,7 @@
 class ApiConfig {
   // Set this to your web app's API URL
-  static const String baseUrl = 'http://192.168.1.14:3000/api/auth';
-  static const String userBaseUrl = 'http://192.168.1.14:3000/api/user';
+  static const String baseUrl = 'http://192.168.1.16:3000/api/auth';
+  static const String userBaseUrl = 'http://192.168.1.16:3000/api/user';
 
   static const String signUpEndpoint = '/register';
   static const String signInEndpoint = '/login';
