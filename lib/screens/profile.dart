@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'change_password.dart';
-import '../services/auth_service.dart'; // Added import for AuthService
+import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,8 +14,11 @@ class _ProfilePageState extends State<ProfilePage> {
   late TextEditingController usernameController;
   late TextEditingController emailController;
   late TextEditingController phoneController;
-  bool _isEditing = false;
+  bool _isEditingUsername = false;
+  bool _isEditingEmail = false;
+  bool _isEditingPhone = false;
   bool _showSuccessBanner = false;
+  bool _isLoading = false;
   String? _errorMessage;
   late String _originalUsername;
   late String _originalEmail;
@@ -34,10 +38,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserData() async {
     final userData = await AuthService.getUserData();
-    print('Loaded user data:');
-    print('Username: \'${userData['username']}\'');
-    print('Email: \'${userData['email']}\'');
-    print('Phone: \'${userData['phone']}\'');
     setState(() {
       usernameController.text = userData['username'] ?? '';
       emailController.text = userData['email'] ?? '';
@@ -56,47 +56,222 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  void _handleSaveProfile() {
+  Future<bool> _showConfirmationDialog(String field, String newValue) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Are you sure?'),
+        content: Text('Do you want to update your $field to "$newValue"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0057B8)),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<String?> _showOtpDialog(String email) async {
+    final controller = TextEditingController();
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter OTP'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('An OTP has been sent to $email.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'OTP'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0057B8)),
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSaveField(String field) async {
     setState(() {
-      _originalUsername = usernameController.text;
-      _originalEmail = emailController.text;
-      _originalPhone = phoneController.text;
-      _isEditing = false;
-      _showSuccessBanner = true;
+      _isLoading = true;
       _errorMessage = null;
     });
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+    try {
+      String? username;
+      String? email;
+      String? phone;
+      String newValue = '';
+      if (field == 'username') {
+        username = usernameController.text;
+        newValue = username;
+      }
+      if (field == 'email') {
+        email = emailController.text;
+        newValue = email;
+      }
+      if (field == 'phone') {
+        phone = phoneController.text;
+        newValue = phone;
+      }
+      // Show confirmation dialog
+      final confirmed = await _showConfirmationDialog(field, newValue);
+      if (!confirmed) {
+        setState(() { _isLoading = false; });
+        return;
+      }
+      // Proceed with update (no OTP for email)
+      final response = await ApiService.updateProfile(
+        username: username,
+        email: email,
+        phone: phone,
+      );
+      if (response['success'] == true) {
+        final currentUserData = await AuthService.getUserData();
+        await AuthService.saveUserData(
+          userId: currentUserData['userId'] ?? '',
+          email: email ?? currentUserData['email'] ?? '',
+          username: username ?? currentUserData['username'] ?? '',
+          phone: phone ?? currentUserData['phone'] ?? '',
+        );
         setState(() {
-          _showSuccessBanner = false;
+          if (field == 'username') {
+            _originalUsername = usernameController.text;
+            _isEditingUsername = false;
+          }
+          if (field == 'email') {
+            _originalEmail = emailController.text;
+            _isEditingEmail = false;
+          }
+          if (field == 'phone') {
+            _originalPhone = phoneController.text;
+            _isEditingPhone = false;
+          }
+          _showSuccessBanner = true;
+          _errorMessage = null;
+        });
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() {
+              _showSuccessBanner = false;
+            });
+          }
+        });
+      } else {
+        setState(() {
+          _errorMessage = response['message'] ?? 'Failed to update profile';
         });
       }
-    });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  void _handleCancelEdit() {
+  void _handleCancelEdit(String field) {
     setState(() {
-      usernameController.text = _originalUsername;
-      emailController.text = _originalEmail;
-      phoneController.text = _originalPhone;
-      _isEditing = false;
+      if (field == 'username') {
+        usernameController.text = _originalUsername;
+        _isEditingUsername = false;
+      }
+      if (field == 'email') {
+        emailController.text = _originalEmail;
+        _isEditingEmail = false;
+      }
+      if (field == 'phone') {
+        phoneController.text = _originalPhone;
+        _isEditingPhone = false;
+      }
       _errorMessage = null;
     });
   }
 
-  Widget buildEditableField(String label, TextEditingController controller, {bool readOnly = true}) {
+  Widget buildProfileField({
+    required String label,
+    required TextEditingController controller,
+    required bool isEditing,
+    required VoidCallback onEdit,
+    required VoidCallback onSave,
+    required VoidCallback onCancel,
+    bool isLoading = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          readOnly: readOnly,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+        const SizedBox(height: 6),
+        Stack(
+          alignment: Alignment.centerRight,
+          children: [
+            TextField(
+              controller: controller,
+              readOnly: !isEditing,
+              style: const TextStyle(fontSize: 15),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFBDBDBD)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFBDBDBD)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF0057B8), width: 2),
+                ),
+              ),
+            ),
+            if (!isEditing)
+              IconButton(
+                icon: const Icon(Icons.edit, color: Color(0xFF0057B8)),
+                onPressed: onEdit,
+                splashRadius: 22,
+              ),
+            if (isEditing)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.check, color: Colors.green),
+                    onPressed: isLoading ? null : onSave,
+                    splashRadius: 22,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    onPressed: isLoading ? null : onCancel,
+                    splashRadius: 22,
+                  ),
+                ],
+              ),
+          ],
         ),
       ],
     );
@@ -118,113 +293,107 @@ class _ProfilePageState extends State<ProfilePage> {
             fontFamily: 'Poppins',
             fontWeight: FontWeight.bold,
             color: Color(0xFF0057B8),
-            fontSize: 18,
+            fontSize: 20,
           ),
         ),
       ),
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               children: [
-                const SizedBox(height: 20),
-                const Text('User Info', style: TextStyle(fontFamily: 'Poppins', fontSize: 16)),
-                const SizedBox(height: 20),
-                buildEditableField('Username:', usernameController, readOnly: !_isEditing),
-                const SizedBox(height: 15),
-                buildEditableField('Email Address:', emailController, readOnly: !_isEditing),
-                const SizedBox(height: 15),
-                buildEditableField('Phone Number:', phoneController, readOnly: !_isEditing),
-                const SizedBox(height: 15),
-                if (_isEditing)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _handleSaveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                const SizedBox(height: 10),
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                    child: Column(
+                      children: [
+                        buildProfileField(
+                          label: 'Username:',
+                          controller: usernameController,
+                          isEditing: _isEditingUsername,
+                          isLoading: _isLoading && _isEditingUsername,
+                          onEdit: () {
+                            setState(() {
+                              _isEditingUsername = true;
+                              _isEditingEmail = false;
+                              _isEditingPhone = false;
+                            });
+                          },
+                          onSave: () => _handleSaveField('username'),
+                          onCancel: () => _handleCancelEdit('username'),
                         ),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
+                        const SizedBox(height: 18),
+                        buildProfileField(
+                          label: 'Email Address:',
+                          controller: emailController,
+                          isEditing: _isEditingEmail,
+                          isLoading: _isLoading && _isEditingEmail,
+                          onEdit: () {
+                            setState(() {
+                              _isEditingUsername = false;
+                              _isEditingEmail = true;
+                              _isEditingPhone = false;
+                            });
+                          },
+                          onSave: () => _handleSaveField('email'),
+                          onCancel: () => _handleCancelEdit('email'),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: _handleCancelEdit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey,
-                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        const SizedBox(height: 18),
+                        buildProfileField(
+                          label: 'Phone Number:',
+                          controller: phoneController,
+                          isEditing: _isEditingPhone,
+                          isLoading: _isLoading && _isEditingPhone,
+                          onEdit: () {
+                            setState(() {
+                              _isEditingUsername = false;
+                              _isEditingEmail = false;
+                              _isEditingPhone = true;
+                            });
+                          },
+                          onSave: () => _handleSaveField('phone'),
+                          onCancel: () => _handleCancelEdit('phone'),
                         ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  ElevatedButton(
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
                     onPressed: () {
-                      setState(() {
-                        _isEditing = true;
-                      });
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      backgroundColor: const Color(0xFF0057B8),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text(
-                      'Edit Profile',
+                      'Change Password',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 16,
                         color: Colors.white,
                       ),
                     ),
                   ),
-                const SizedBox(height: 16),
-                if (_errorMessage != null)
-                  Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[800],
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  child: const Text(
-                    'Change Password',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.white,
-                    ),
-                  ),
                 ),
+                const SizedBox(height: 20),
               ],
             ),
           ),

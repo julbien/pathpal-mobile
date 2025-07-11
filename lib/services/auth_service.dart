@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class AuthService {
   static const String _tokenKey = 'auth_token';
@@ -88,5 +89,8 @@ class AuthService {
     await prefs.remove(_userUsernameKey);
     await prefs.remove(_userPhoneKey);
     // Don't remove remember me preferences on logout
+    
+    // Clear session cookies
+    ApiService.clearSessionCookies();
   }
 } 

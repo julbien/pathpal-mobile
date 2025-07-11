@@ -1,10 +1,28 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
-import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
 class ApiService {
+  // Session management
+  static final Map<String, String> _sessionCookies = {};
+  
+  static void setSessionCookies(Map<String, String> cookies) {
+    _sessionCookies.clear();
+    _sessionCookies.addAll(cookies);
+  }
+  
+  static String getCookieHeader() {
+    if (_sessionCookies.isEmpty) return '';
+    return _sessionCookies.entries
+        .map((e) => '${e.key}=${e.value}')
+        .join('; ');
+  }
+  
+  static void clearSessionCookies() {
+    _sessionCookies.clear();
+  }
+  
   // Sign up method
   static Future<Map<String, dynamic>> signUp({
     required String username,
@@ -62,7 +80,10 @@ class ApiService {
       print('Attempting to sign in with email: $email');
       print('API URL: ${ApiConfig.baseUrl}${ApiConfig.signInEndpoint}');
       
-      final response = await http.post(
+      // Create a client to maintain cookies
+      final client = http.Client();
+      
+      final response = await client.post(
         Uri.parse('${ApiConfig.baseUrl}${ApiConfig.signInEndpoint}'),
         headers: {
           'Content-Type': 'application/json',
@@ -78,14 +99,37 @@ class ApiService {
 
       print('Sign in response status: ${response.statusCode}');
       print('Sign in response body: ${response.body}');
+      print('Sign in response cookies: ${response.headers['set-cookie']}');
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         print('Sign in successful: $responseData');
+        
+        // Extract and store session cookies
+        final cookies = <String, String>{};
+        final setCookieHeaders = response.headers['set-cookie'];
+        if (setCookieHeaders != null) {
+          // Split multiple cookies if they exist
+          final cookieList = setCookieHeaders.split(',');
+          for (final cookie in cookieList) {
+            final parts = cookie.split(';');
+            if (parts.isNotEmpty) {
+              final keyValue = parts[0].split('=');
+              if (keyValue.length == 2) {
+                cookies[keyValue[0].trim()] = keyValue[1].trim();
+              }
+            }
+          }
+        }
+        setSessionCookies(cookies);
+        print('Session cookies stored: $cookies');
+        
+        client.close();
         return responseData;
       } else {
         final errorBody = response.body;
         print('Sign in failed with status ${response.statusCode}: $errorBody');
+        client.close();
         throw Exception('Failed to sign in: $errorBody');
       }
     } catch (e) {
@@ -265,28 +309,60 @@ class ApiService {
 
   // Update user profile
   static Future<Map<String, dynamic>> updateProfile({
-    required String userId,
-    required String username,
-    required String email,
-    required String phone,
+    String? username,
+    String? email,
+    String? phone,
   }) async {
     try {
-      final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/update-profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+      print('Attempting to update profile');
+      print('API URL: ${ApiConfig.userBaseUrl}/profile');
+      
+      // Create a client that maintains cookies for session
+      final client = http.Client();
+      
+      // Prepare headers with session cookies
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      final cookieHeader = getCookieHeader();
+      if (cookieHeader.isNotEmpty) {
+        headers['Cookie'] = cookieHeader;
+        print('Including session cookies: $cookieHeader');
+      }
+      
+      final response = await client.put(
+        Uri.parse('${ApiConfig.userBaseUrl}/profile'),
+        headers: headers,
         body: jsonEncode({
-          'user_id': userId,
-          'username': username,
-          'email': email,
-          'phone': phone,
+          if (username != null) 'username': username,
+          if (email != null) 'email': email,
+          if (phone != null) 'phone': phone,
         }),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
       );
-      final responseData = jsonDecode(response.body);
-      return responseData;
+      
+      print('Update profile response status: ${response.statusCode}');
+      print('Update profile response body: ${response.body}');
+      
+      client.close();
+      
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('Update profile successful: $responseData');
+        return responseData;
+      } else {
+        final errorBody = response.body;
+        print('Update profile failed with status ${response.statusCode}: $errorBody');
+        throw Exception('Failed to update profile: $errorBody');
+      }
     } catch (e) {
+      print('Update profile error: $e');
+      if (e.toString().contains('SocketException')) {
+        throw Exception('Network connection failed. Please check your internet connection and make sure the web app is running.');
+      }
       throw Exception('Failed to update profile: $e');
     }
   }
@@ -352,6 +428,63 @@ class ApiService {
         throw Exception('Network connection failed. Please check your internet connection and make sure the web app is running.');
       }
       throw Exception('Network error: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      print('Attempting to change password');
+      print('API URL: ${ApiConfig.userBaseUrl}${ApiConfig.changePasswordEndpoint}');
+      
+      // Create a client that maintains cookies for session
+      final client = http.Client();
+      
+      // Prepare headers with session cookies
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      final cookieHeader = getCookieHeader();
+      if (cookieHeader.isNotEmpty) {
+        headers['Cookie'] = cookieHeader;
+        print('Including session cookies: $cookieHeader');
+      }
+      
+      final response = await client.post(
+        Uri.parse('${ApiConfig.userBaseUrl}${ApiConfig.changePasswordEndpoint}'),
+        headers: headers,
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        }),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
+      );
+      
+      print('Change password response status: ${response.statusCode}');
+      print('Change password response body: ${response.body}');
+      
+      client.close();
+      
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('Change password successful: $responseData');
+        return responseData;
+      } else {
+        final errorBody = response.body;
+        print('Change password failed with status ${response.statusCode}: $errorBody');
+        throw Exception('Failed to change password: $errorBody');
+      }
+    } catch (e) {
+      print('Change password error: $e');
+      if (e.toString().contains('SocketException')) {
+        throw Exception('Network connection failed. Please check your internet connection and make sure the web app is running.');
+      }
+      throw Exception('Failed to change password: $e');
     }
   }
 } 
