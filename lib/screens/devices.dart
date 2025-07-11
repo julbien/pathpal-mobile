@@ -26,12 +26,13 @@ class DevicePage extends StatefulWidget {
 
 class _DevicePageState extends State<DevicePage> {
   List<Map<String, String>> devices = [];
+  final TextEditingController _deviceNameController = TextEditingController();
+  final TextEditingController _serialController = TextEditingController();
 
-  // Show link or edit dialog depending on isUpdate value
   void showLinkOrEditDialog(BuildContext context, {required bool isUpdate, int? deviceIndex}) {
     showDialog(
       context: context,
-      barrierDismissible: false, // Don't close when tapping outside
+      barrierDismissible: false,
       builder: (context) {
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -40,25 +41,18 @@ class _DevicePageState extends State<DevicePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Dialog title
                 Text(
                   isUpdate ? 'Update Device' : 'Link Device',
-                  style: TextStyle(
-                      color: Colors.blue[900], fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.blue[900], fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-
-                // Device name input
                 const Align(alignment: Alignment.centerLeft, child: Text("Device Name:")),
                 const SizedBox(height: 4),
                 TextField(
                   controller: _deviceNameController,
                   decoration: const InputDecoration(border: OutlineInputBorder()),
                 ),
-
                 const SizedBox(height: 12),
-
-                // Serial number input (readonly if updating)
                 const Align(alignment: Alignment.centerLeft, child: Text("Serial Number:")),
                 const SizedBox(height: 4),
                 TextField(
@@ -67,15 +61,12 @@ class _DevicePageState extends State<DevicePage> {
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     hintText: isUpdate ? _serialController.text : "Enter 5-digit number",
-                    helperText: isUpdate ? null : "Enter 5-digit number (will be prefixed with PPSC-)",
+                    helperText: isUpdate ? null : "(will be prefixed with PPSC-)",
                     fillColor: isUpdate ? Colors.grey.shade200 : null,
                     filled: isUpdate,
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Cancel and Save buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -103,11 +94,6 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  // Controllers for device fields
-  final TextEditingController _deviceNameController = TextEditingController();
-  final TextEditingController _serialController = TextEditingController();
-
-  // Show confirmation dialog before saving
   void showConfirmationDialog(BuildContext context, {required bool isUpdate, int? deviceIndex}) {
     showDialog(
       context: context,
@@ -122,11 +108,8 @@ class _DevicePageState extends State<DevicePage> {
               const SizedBox(height: 16),
               const Text('Are you sure?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
-              const Text('Do you want to save this device?',
-                  textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+              const Text('Do you want to save this device?', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
               const SizedBox(height: 24),
-
-              // No and Yes buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -190,7 +173,6 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  // Show confirmation before unlinking a device
   void showUnlinkConfirmationDialog(BuildContext context, int deviceIndex) {
     showDialog(
       context: context,
@@ -205,8 +187,7 @@ class _DevicePageState extends State<DevicePage> {
               const SizedBox(height: 16),
               const Text('Are you sure?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
-              const Text('Do you really want to unlink this device?',
-                  textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+              const Text('Do you really want to unlink this device?', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -233,7 +214,6 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  // Show success message after action is completed
   void showSuccessDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -273,8 +253,6 @@ class _DevicePageState extends State<DevicePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
-      // App bar
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -282,21 +260,16 @@ class _DevicePageState extends State<DevicePage> {
           icon: Icon(Icons.arrow_back, color: Colors.blue[900]),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Devices',
-            style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text('Devices', style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 20)),
       ),
-
-      // Main body content
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
         child: Column(
           children: [
-            // Header + Link button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('All Linked Devices',
-                    style: TextStyle(fontSize: 14, color: Colors.black)),
+                const Text('All Linked Devices', style: TextStyle(fontSize: 14, color: Colors.black)),
                 ElevatedButton.icon(
                   onPressed: () => showLinkOrEditDialog(context, isUpdate: false),
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
@@ -308,9 +281,7 @@ class _DevicePageState extends State<DevicePage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
             devices.isEmpty
                 ? const Text('No devices linked yet.', style: TextStyle(color: Colors.black54, fontSize: 16))
                 : Expanded(
@@ -328,22 +299,14 @@ class _DevicePageState extends State<DevicePage> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Device info
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(device['name'] ?? '',
-                                      style: TextStyle(
-                                          color: Colors.blue[900],
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16)),
+                                  Text(device['name'] ?? '', style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 16)),
                                   const SizedBox(height: 4),
-                                  Text(device['serial'] ?? '',
-                                      style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                                  Text(device['serial'] ?? '', style: const TextStyle(color: Colors.black54, fontSize: 13)),
                                 ],
                               ),
-
-                              // Edit and Unlink buttons
                               Row(
                                 children: [
                                   ElevatedButton(

@@ -19,7 +19,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -62,7 +61,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
   }
@@ -77,12 +75,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
       return;
     }
-
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
-    // Math CAPTCHA validation
     if (int.tryParse(_captchaController.text) != _mathAnswer) {
       setState(() {
         _captchaError = 'Incorrect answer. Please try again.';
@@ -90,12 +85,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _generateCaptcha();
       return;
     }
-
     setState(() {
       _isLoading = true;
       _captchaError = null;
     });
-
     try {
       final response = await ApiService.signUp(
         username: _usernameController.text.trim(),
@@ -103,15 +96,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
         phoneNumber: _phoneController.text.trim(),
         password: _passwordController.text,
       );
-
-      // Save user data and token
       if (response['token'] != null) {
         await AuthService.saveToken(response['token']);
+        
+        // Debug: Print the response to see the structure
+        print('Signup response: $response');
+        print('User data in response: ${response['user']}');
+        
+        // Always use the phone number from the form, regardless of API response
+        String phoneNumber = _phoneController.text.trim();
+        
+        // Check if API returned a different phone number (in case it was formatted)
+        if (response['user']?['phone'] != null) {
+          phoneNumber = response['user']['phone'].toString();
+        } else if (response['user']?['phone_number'] != null) {
+          phoneNumber = response['user']['phone_number'].toString();
+        } else if (response['user']?['phoneNumber'] != null) {
+          phoneNumber = response['user']['phoneNumber'].toString();
+        }
+        
+        print('Phone number from form: ${_phoneController.text.trim()}');
+        print('Phone number from API: ${response['user']?['phone']}');
+        print('Phone number to save: $phoneNumber');
+        
         await AuthService.saveUserData(
           userId: response['user']['id'] ?? '',
           email: response['user']['email'] ?? '',
+          username: response['user']['username'] ?? _usernameController.text.trim(),
+          phone: phoneNumber,
         );
-
+        
+        // Verify the data was saved
+        final savedData = await AuthService.getUserData();
+        print('Saved user data: $savedData');
         if (mounted) {
           setState(() {
             _showSuccessBanner = true;
@@ -121,7 +138,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             setState(() {
               _showSuccessBanner = false;
             });
-            // Navigate to dashboard
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const DashboardPage()),
@@ -148,17 +164,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   bool _isPasswordValid(String password) {
-    return _missingPasswordRequirements(password).isEmpty;
-  }
-
-  List<String> _missingPasswordRequirements(String password) {
-    final List<String> missing = [];
-    if (password.length < 8) missing.add('at least 8 characters');
-    if (!RegExp(r'(?=.*[a-z])').hasMatch(password)) missing.add('a lowercase letter');
-    if (!RegExp(r'(?=.*[A-Z])').hasMatch(password)) missing.add('an uppercase letter');
-    if (!RegExp(r'(?=.*[0-9])').hasMatch(password)) missing.add('a number');
-    if (!RegExp(r'(?=.*[!@#\$%^&*(),.?":{}|<>])').hasMatch(password)) missing.add('a special character');
-    return missing;
+    return password.length >= 8 &&
+           RegExp(r'(?=.*[a-z])').hasMatch(password) &&
+           RegExp(r'(?=.*[A-Z])').hasMatch(password) &&
+           RegExp(r'(?=.*[0-9])').hasMatch(password) &&
+           RegExp(r'(?=.*[!@#\$%^&*(),.?":{}|<>])').hasMatch(password);
   }
 
   @override
@@ -176,7 +186,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo at the top
                   Container(
                     width: 100,
                     height: 100,
@@ -190,10 +199,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       fit: BoxFit.cover,
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // Welcome texts
                   const Text(
                     'Welcome!',
                     style: TextStyle(
@@ -208,8 +214,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     style: TextStyle(color: Colors.black54),
                   ),
                   const SizedBox(height: 32),
-
-                  // Username field
                   TextFormField(
                     controller: _usernameController,
                     validator: (value) {
@@ -227,8 +231,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Email field
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -236,7 +238,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Please enter email';
                       }
-                      if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$').hasMatch(value)) {
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -250,8 +252,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Phone number field
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
@@ -270,22 +270,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Password field
                   TextFormField(
                     controller: _passwordController,
-                    focusNode: _passwordFocusNode,
                     obscureText: _obscurePassword,
-                    onChanged: (_) {
-                      setState(() {});
+                    focusNode: _passwordFocusNode,
+                    onChanged: (value) {
+                      setState(() {
+                        // Trigger rebuild to update password requirements text
+                      });
                     },
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter password';
                       }
-                      final missing = _missingPasswordRequirements(value);
-                      if (missing.isNotEmpty) {
-                        return 'Password must have: ' + missing.join(', ');
+                      if (!_isPasswordValid(value)) {
+                        return 'Password does not meet requirements';
                       }
                       return null;
                     },
@@ -293,34 +292,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       hintText: 'Password',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: _passwordController.text.isEmpty
-                              ? Colors.grey
-                              : _isPasswordValid(_passwordController.text)
-                                  ? Colors.green
-                                  : Colors.red,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: _passwordController.text.isEmpty
-                              ? Colors.grey
-                              : _isPasswordValid(_passwordController.text)
-                                  ? Colors.green
-                                  : Colors.red,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: _passwordController.text.isEmpty
-                              ? Colors.grey
-                              : _isPasswordValid(_passwordController.text)
-                                  ? Colors.green
-                                  : Colors.red,
-                          width: 2,
-                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                       suffixIcon: IconButton(
@@ -335,28 +306,54 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  if (_showPasswordRequirements)
+                  if (_passwordController.text.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                      padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
-                        'Minimum of 8 characters, at least 1 uppercase, 1 lowercase, 1 number and 1 special character.',
+                        'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
                         style: TextStyle(
-                          fontSize: 13,
-                          color: _passwordController.text.isEmpty
-                              ? Colors.red
-                              : _isPasswordValid(_passwordController.text)
-                                  ? Colors.green
-                                  : Colors.red,
-                          fontWeight: _isPasswordValid(_passwordController.text)
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                          color: _isPasswordValid(_passwordController.text) ? Colors.green : Colors.red,
+                          fontSize: 12,
                         ),
                       ),
                     ),
                   const SizedBox(height: 16),
-
-                  // Terms and conditions
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _captchaController,
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Answer required';
+                            }
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            hintText: '$_num1 + $_num2 = ?',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: _generateCaptcha,
+                      ),
+                    ],
+                  ),
+                  if (_captchaError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        _captchaError!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Checkbox(
@@ -371,13 +368,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         child: RichText(
                           text: TextSpan(
                             text: 'I agree to the ',
-                            style: const TextStyle(color: Colors.black54),
+                            style: const TextStyle(color: Colors.black),
                             children: [
                               TextSpan(
                                 text: 'Terms and Conditions',
                                 style: const TextStyle(
                                   color: Color(0xFF0057B8),
-                                  fontWeight: FontWeight.bold,
                                   decoration: TextDecoration.underline,
                                 ),
                                 recognizer: TapGestureRecognizer()
@@ -385,8 +381,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (context) =>
-                                              const TermsAndConditionsScreen()),
+                                        builder: (context) => const TermsAndConditionsScreen(),
+                                      ),
                                     );
                                   },
                               ),
@@ -396,36 +392,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Math CAPTCHA
-                  Row(
-                    children: [
-                      Text('$_num1 + $_num2 = ?'),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 60,
-                        child: TextField(
-                          controller: _captchaController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Answer',
-                            errorText: _captchaError,
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: _generateCaptcha,
-                        tooltip: 'New question',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Sign Up button
+                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -453,24 +420,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Link to go back to login page
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("Already have an account? "),
-                      GestureDetector(
-                        onTap: () {
+                      const Text('Already have an account?'),
+                      TextButton(
+                        onPressed: () {
                           Navigator.pop(context);
                         },
-                        child: const Text(
-                          'Sign In here',
-                          style: TextStyle(
-                            color: Color(0xFF0057B8),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
+                        child: const Text('Sign In'),
+                      ),
                     ],
                   ),
                 ],

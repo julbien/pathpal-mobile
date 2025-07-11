@@ -265,30 +265,29 @@ class ApiService {
 
   // Update user profile
   static Future<Map<String, dynamic>> updateProfile({
+    required String userId,
     required String username,
     required String email,
-    required String phoneNumber,
+    required String phone,
   }) async {
     try {
-      final token = await AuthService.getToken();
       final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/profile/update'),
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/update-profile'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
+          'user_id': userId,
           'username': username,
           'email': email,
-          'phone_number': phoneNumber,
+          'phone': phone,
         }),
-      ).timeout(
-        Duration(milliseconds: ApiConfig.connectionTimeout),
       );
-      return jsonDecode(response.body);
+      final responseData = jsonDecode(response.body);
+      return responseData;
     } catch (e) {
-      throw Exception('Network error: $e');
+      throw Exception('Failed to update profile: $e');
     }
   }
 
@@ -308,6 +307,50 @@ class ApiService {
       );
       return jsonDecode(response.body);
     } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Verify current password
+  static Future<Map<String, dynamic>> verifyCurrentPassword({
+    required String token,
+    required String currentPassword,
+  }) async {
+    try {
+      print('Attempting to verify current password');
+      print('API URL: ${ApiConfig.baseUrl}/auth/verify-password');
+      
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/auth/verify-password'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+        }),
+      ).timeout(
+        Duration(milliseconds: ApiConfig.connectionTimeout),
+      );
+
+      print('Verify password response status: ${response.statusCode}');
+      print('Verify password response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('Verify password successful: $responseData');
+        return responseData;
+      } else {
+        final errorBody = response.body;
+        print('Verify password failed with status ${response.statusCode}: $errorBody');
+        throw Exception('Failed to verify password: $errorBody');
+      }
+    } catch (e) {
+      print('Verify password error: $e');
+      if (e.toString().contains('SocketException')) {
+        throw Exception('Network connection failed. Please check your internet connection and make sure the web app is running.');
+      }
       throw Exception('Network error: $e');
     }
   }

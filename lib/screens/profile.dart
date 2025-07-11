@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'change_password.dart';
+import '../services/auth_service.dart'; // Added import for AuthService
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -22,13 +23,29 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    // TODO: Replace with API call to fetch real user data
     usernameController = TextEditingController();
     emailController = TextEditingController();
     phoneController = TextEditingController();
     _originalUsername = '';
     _originalEmail = '';
     _originalPhone = '';
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final userData = await AuthService.getUserData();
+    print('Loaded user data:');
+    print('Username: \'${userData['username']}\'');
+    print('Email: \'${userData['email']}\'');
+    print('Phone: \'${userData['phone']}\'');
+    setState(() {
+      usernameController.text = userData['username'] ?? '';
+      emailController.text = userData['email'] ?? '';
+      phoneController.text = userData['phone'] ?? '';
+      _originalUsername = userData['username'] ?? '';
+      _originalEmail = userData['email'] ?? '';
+      _originalPhone = userData['phone'] ?? '';
+    });
   }
 
   @override
@@ -37,6 +54,52 @@ class _ProfilePageState extends State<ProfilePage> {
     emailController.dispose();
     phoneController.dispose();
     super.dispose();
+  }
+
+  void _handleSaveProfile() {
+    setState(() {
+      _originalUsername = usernameController.text;
+      _originalEmail = emailController.text;
+      _originalPhone = phoneController.text;
+      _isEditing = false;
+      _showSuccessBanner = true;
+      _errorMessage = null;
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showSuccessBanner = false;
+        });
+      }
+    });
+  }
+
+  void _handleCancelEdit() {
+    setState(() {
+      usernameController.text = _originalUsername;
+      emailController.text = _originalEmail;
+      phoneController.text = _originalPhone;
+      _isEditing = false;
+      _errorMessage = null;
+    });
+  }
+
+  Widget buildEditableField(String label, TextEditingController controller, {bool readOnly = true}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          readOnly: readOnly,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -73,7 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 buildEditableField('Email Address:', emailController, readOnly: !_isEditing),
                 const SizedBox(height: 15),
                 buildEditableField('Phone Number:', phoneController, readOnly: !_isEditing),
-                const SizedBox(height: 30),
+                const SizedBox(height: 15),
                 if (_isEditing)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -183,52 +246,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
         ],
       ),
-    );
-  }
-
-  void _handleSaveProfile() {
-    setState(() {
-      _originalUsername = usernameController.text;
-      _originalEmail = emailController.text;
-      _originalPhone = phoneController.text;
-      _isEditing = false;
-      _showSuccessBanner = true;
-      _errorMessage = null;
-    });
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _showSuccessBanner = false;
-        });
-      }
-    });
-  }
-
-  void _handleCancelEdit() {
-    setState(() {
-      usernameController.text = _originalUsername;
-      emailController.text = _originalEmail;
-      phoneController.text = _originalPhone;
-      _isEditing = false;
-      _errorMessage = null;
-    });
-  }
-
-  Widget buildEditableField(String label, TextEditingController controller, {bool readOnly = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontFamily: 'Poppins')),
-        const SizedBox(height: 5),
-        TextFormField(
-          controller: controller,
-          readOnly: readOnly,
-          decoration: InputDecoration(
-            suffixIcon: readOnly ? const Icon(Icons.lock, color: Colors.grey) : const Icon(Icons.edit, color: Colors.blue),
-            border: const OutlineInputBorder(),
-          ),
-        ),
-      ],
     );
   }
 } 

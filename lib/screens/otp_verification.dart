@@ -28,13 +28,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     setState(() {
       _isLoading = true;
     });
-
     try {
       final response = await ApiService.verifyOtp(
         email: widget.email,
         otp: _otpController.text,
       );
-
       if (mounted) {
         if (response['success'] == true) {
           Navigator.push(

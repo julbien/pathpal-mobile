@@ -4,7 +4,7 @@ import 'dashboard.dart';
 import 'forgot_password.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
-import '../services/connection_test.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,6 +23,24 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
 
   @override
+  void initState() {
+    super.initState();
+    _loadRememberMeData();
+  }
+
+  Future<void> _loadRememberMeData() async {
+    final rememberedEmail = await AuthService.getRememberedEmail();
+    final rememberMe = await AuthService.getRememberMe();
+    
+    if (rememberedEmail != null && rememberMe) {
+      setState(() {
+        _emailController.text = rememberedEmail;
+        _rememberMe = true;
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -33,19 +51,29 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
     setState(() {
       _isLoading = true;
     });
-
     try {
       final response = await ApiService.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-
+      print('Login API user data: ${response['user']}');
       if (response['success'] == true && response['user'] != null) {
-        print('Login success, navigating to dashboard...');
+        // Save remember me preference
+        await AuthService.saveRememberMe(_rememberMe, _emailController.text.trim());
+        
+        // Save user data if login successful
+        if (response['user'] != null) {
+          await AuthService.saveUserData(
+            userId: response['user']['id']?.toString() ?? response['user']['_id']?.toString() ?? '',
+            email: response['user']['email'] ?? _emailController.text.trim(),
+            username: response['user']['username'] ?? '',
+            phone: response['user']['phone'] ?? '',
+          );
+        }
+        
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -54,8 +82,8 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Login failed: ${response['message'] ?? 'Unknown error'}'),
+          const SnackBar(
+            content: Text('Invalid credentials'),
             backgroundColor: Colors.red,
           ),
         );
@@ -63,8 +91,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
+          const SnackBar(
+            content: Text('Invalid credentials'),
             backgroundColor: Colors.red,
           ),
         );
@@ -89,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
               key: _formKey,
               child: Column(
                 children: [
-                  // Logo
                   Container(
                     width: 100,
                     height: 100,
@@ -118,8 +145,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.black54),
                   ),
                   const SizedBox(height: 32),
-
-                  // Email
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -127,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Please enter email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -141,8 +166,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Password
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -171,8 +194,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Remember me & Forgot Password
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -200,9 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Sign In Button
+                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -230,43 +249,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Sign up link
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("Don't have an account? "),
-                      GestureDetector(
-                        onTap: () {
+                      const Text('Don\'t have an account?'),
+                      TextButton(
+                        onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const SignUpScreen()),
                           );
                         },
-                        child: const Text(
-                          'Sign Up here',
-                          style: TextStyle(
-                            color: Color(0xFF0057B8),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Connection test button (for debugging)
-                  TextButton(
-                    onPressed: () {
-                      ConnectionTest.testWebAppConnection(context);
-                    },
-                    child: const Text(
-                      'Test Connection',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
+                        child: const Text('Sign Up'),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
